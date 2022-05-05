@@ -65,7 +65,7 @@ def main(args):
                        'std': [0.229, 0.224, 0.225]}
     normalize = transforms.Normalize(**norm_params)
     train_transforms = transforms.Compose([
-                transforms.RandomResizedCrop(args.image_size),
+                transforms.Resize((args.image_size, args.image_size)),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 normalize,
