@@ -40,7 +40,6 @@ parser.add_argument('--scheduler', type=str, default='cosine')
 parser.add_argument('--prompt_length', type=int, default=10)
 parser.add_argument('--name', type=str, default='vpt_deep')
 parser.add_argument('--base_model', type=str, default='vit_base_patch16_224_in21k')
-parser.add_argument('--vpt_type', type=str, default='Deep')
 
 def setup_seed(seed):  # setting up the random seed
     import random
@@ -61,11 +60,13 @@ def main(args):
     edge_size=384
     data = torch.randn(batch_size, 3, args.image_size, args.image_size)
     # labels = torch.ones(batch_size).long()  # long ones
-    norm_params = {'mean': [0.485, 0.456, 0.406],
-                       'std': [0.229, 0.224, 0.225]}
+    norm_params = {'mean': [0.5, 0.5, 0.5],
+                       'std': [0.5, 0.5, 0.5]}
+    #norm_params = {'mean': [0.485, 0.456, 0.406],
+    #                   'std': [0.229, 0.224, 0.225]}
     normalize = transforms.Normalize(**norm_params)
     train_transforms = transforms.Compose([
-                transforms.Resize((args.image_size, args.image_size)),
+                transforms.RandomResizedCrop(args.image_size),
                 transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 normalize,
@@ -85,14 +86,14 @@ def main(args):
     val_loader = DataLoader(val_dataset, batch_size=int(args.batch_size), shuffle=False)
 
     model = build_promptmodel(num_classes=num_classes, img_size=args.image_size, base_model=args.base_model, model_idx='ViT', patch_size=16,
-                            Prompt_Token_num=args.prompt_length, VPT_type=args.vpt_type)  # VPT_type = "Shallow"
+                            Prompt_Token_num=args.prompt_length, VPT_type="Deep")  # VPT_type = "Shallow"
     # test for updating
-    prompt_state_dict = model.obtain_prompt()
-    model.load_prompt(prompt_state_dict)
+    #prompt_state_dict = model.obtain_prompt()
+    #model.load_prompt(prompt_state_dict)
     model = model.to(device)
 
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
-    scheduler = CosineLRScheduler(optimizer, warmup_lr_init=1e-5, t_initial=args.epochs, cycle_decay=0.1, warmup_t=args.warmup_epochs)
+    optimizer = optim.SGD(model.prompt_learner.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=args.momentum)
+    scheduler = CosineLRScheduler(optimizer, warmup_lr_init=1e-6, t_initial=args.epochs, cycle_decay=0.1, warmup_t=args.warmup_epochs)
     criterion = nn.CrossEntropyLoss()
 
     # preds = model(data)  # (1, class_number)
@@ -104,10 +105,10 @@ def main(args):
             print(param.shape)
     max_va = -1
     for epoch in range(args.epochs):
-        print('epoch:',epoch)
         aves_keys = ['tl', 'ta', 'vl', 'va']
         aves = {k: Averager() for k in aves_keys}
         iter_num = 0
+        model.train()
         model.Freeze()
         for imgs, targets in tqdm(train_loader, desc='train', leave=False):
             imgs = imgs.to(device)
